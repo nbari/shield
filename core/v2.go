@@ -579,12 +579,28 @@ func (core *Core) v2API() *route.Router {
 
 		var in struct {
 			Name string `json:"name"`
+			UUID string `json:"uuid"`
 		}
 		if !r.Payload(&in) {
 			return
 		}
 		if r.Missing("name", in.Name) {
 			return
+		}
+
+		/* an admin wants to generate a token for a specific (non-sysrole) UUID */
+		if !core.IsNotSystemAdmin(r) && in.UUID != "" {
+			var err error
+			user, err = core.DB.GetUserByID(in.UUID)
+			if err != nil || user == nil {
+				r.Fail(route.Oops(err, "Unrecognized user account '%s'", in.UUID))
+				return
+			}
+
+			if user.SysRole != "" {
+				r.Fail(route.Oops(err, "Cannot generate token for '%s' (sysrole assigned)", in.UUID))
+				return
+			}
 		}
 
 		existing, err := core.DB.GetAllAuthTokens(&db.AuthTokenFilter{
